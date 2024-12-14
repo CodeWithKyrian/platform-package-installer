@@ -1,6 +1,6 @@
 {
   "name": "codewithkyrian/platform-package-installer",
-  "description": "A Composer plugin that provides fine-grained control over platform-specific package distribution, allowing developers to exclude platform-specific files, generate custom distribution URLs, and optimize package installation across different operating systems and architectures.",
+  "description": "A Composer plugin that provides fine-grained control over platform-specific package distribution for PHP projects",
   "version": "1.0.0",
   "type": "composer-plugin",
   "license": "MIT",
