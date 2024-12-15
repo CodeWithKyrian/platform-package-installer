@@ -1,8 +1,12 @@
 name: Create Platform-Specific Artifacts
 
+permissions:
+  contents: write
+  packages: read
+
 on:
   release:
-    types: [ published, created, edited, prereleased ]
+    types: [ published ]
 
   workflow_dispatch:
     inputs:
