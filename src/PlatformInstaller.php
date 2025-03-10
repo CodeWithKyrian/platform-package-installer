@@ -33,11 +33,35 @@ class PlatformInstaller extends LibraryInstaller
         $platformUrls = $this->validatePlatformUrls($package, $platformUrls);
 
         if ($matchingUrl = Platform::findBestMatch($platformUrls)) {
-            return $matchingUrl;
+            // Check if the URL exists
+            if ($this->urlExists($matchingUrl)) {
+                return $matchingUrl;
+            }
+            
+            $this->io->writeError("{$package->getName()}: URL found for current platform but it doesn't exist: $matchingUrl");
+            return false;
         }
 
         $this->io->writeError("{$package->getName()}: No download URL found for current platform");
         return false;
+    }
+
+    /**
+     * Check if a URL exists by sending a HEAD request
+     */
+    private function urlExists(string $url): bool
+    {
+        try {
+            $headers = @get_headers($url);
+            
+            if ($headers === false) {
+                return false;
+            }
+            
+            return str_contains($headers[0], '200');
+        } catch (\Exception) {
+            return false;
+        }
     }
 
     /**
