@@ -37,7 +37,7 @@ class PlatformInstaller extends LibraryInstaller
             if ($this->urlExists($matchingUrl)) {
                 return $matchingUrl;
             }
-            
+
             $this->io->writeError("{$package->getName()}: URL found for current platform but it doesn't exist: $matchingUrl");
             return false;
         }
@@ -53,12 +53,12 @@ class PlatformInstaller extends LibraryInstaller
     {
         try {
             $headers = @get_headers($url);
-            
+
             if ($headers === false) {
                 return false;
             }
-            
-            return str_contains($headers[0], '200');
+
+            return str_contains($headers[0], '200') || str_contains($headers[0], '302');
         } catch (\Exception) {
             return false;
         }
