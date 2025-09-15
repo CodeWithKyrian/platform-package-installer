@@ -123,13 +123,13 @@ class Platform
      *
      * @return T|false The matching entry, or false if no match is found
      */
-    public static function findBestMatch(array $platformEntries, array $currentPlatform = null): mixed
+    public static function findBestMatch(array $platformEntries, ?array $currentPlatform = null): mixed
     {
         $currentPlatform = $currentPlatform ?? self::current();
 
         $matchingPlatforms = array_filter(
             array_keys($platformEntries),
-            fn ($platform) => self::matches($platform, $currentPlatform)
+            fn($platform) => self::matches($platform, $currentPlatform)
         );
 
         $prioritizedMatches = self::prioritizePlatformMatches($matchingPlatforms);
