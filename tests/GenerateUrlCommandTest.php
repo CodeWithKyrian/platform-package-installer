@@ -10,7 +10,11 @@ use Symfony\Component\Console\Application;
 beforeEach(function () {
     $application = new Application();
     $urlGeneratorCommand = new GenerateUrlCommand();
-    $application->add($urlGeneratorCommand);
+    if (method_exists($application, 'add')) {
+        $application->add($urlGeneratorCommand);
+    } elseif (method_exists($application, 'addCommand')) {
+        $application->addCommand($urlGeneratorCommand);
+    }
     $application->setAutoExit(false);
     $this->command = $application->find('platform:generate-urls');
 
