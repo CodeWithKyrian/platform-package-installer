@@ -32,7 +32,7 @@
   },
   "scripts": {
     "test": "vendor/bin/pest",
-    "test:coverage": "XDEBUG_MODE=coverage ./vendor/bin/pest --coverage"
+    "test:coverage": "./vendor/bin/pest --coverage"
   },
   "extra": {
     "class": "Codewithkyrian\\PlatformPackageInstaller\\Plugin",

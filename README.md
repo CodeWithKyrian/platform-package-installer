@@ -107,9 +107,11 @@ For the example above, the generated config added to `composer.json` would look 
 ```json
 {
   "extra": {
-    "platform-urls": {
-      "linux-x86_64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-linux-x86_64.tar.gz",
-      "darwin-arm64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-darwin-arm64.tar.gz"
+    "artifacts": {
+      "urls": {
+        "linux-x86_64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-linux-x86_64.tar.gz",
+        "darwin-arm64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-darwin-arm64.tar.gz"
+      }
     }
   }
 }
@@ -119,6 +121,43 @@ Now the next time someone installs your package, Composer will use the generated
 platform-specific package. The good thing is that if for any reason the URLs are wrong or not working, Composer
 falls back to downloading the original source (which means more things to download and slower installation but hey, it's
 better than nothing).
+
+### Application Overrides (Variables)
+
+Platform packages can optionally define placeholder variables that are substituted into the selected URL at install time.
+`{version}` is built in and always available. You can also use custom placeholders like `{cuda}` and set defaults in the
+platform package, then override them in the consuming application (root project).
+
+**Platform package (defaults):**
+
+```json
+{
+  "extra": {
+    "artifacts": {
+      "vars": {
+        "cuda": "12"
+      },
+      "urls": {
+        "darwin-arm64": "https://cdn.example.com/onyx/{version}/cuda-{cuda}/dist-darwin-arm64.tar.gz"
+      }
+    }
+  }
+}
+```
+
+**Application (overrides by package name):**
+
+```json
+{
+  "extra": {
+    "platform-packages": {
+      "org/onyx-runtime": {
+        "cuda": "13"
+      }
+    }
+  }
+}
+```
 
 ## Platform Identifiers
 
