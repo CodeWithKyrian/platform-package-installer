@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use Codewithkyrian\PlatformPackageInstaller\GenerateUrlCommand;
-use Composer\Console\Application;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Application;
 
 beforeEach(function () {
     $application = new Application();
