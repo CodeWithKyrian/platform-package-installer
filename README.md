@@ -108,10 +108,8 @@ For the example above, the generated config added to `composer.json` would look 
 {
   "extra": {
     "artifacts": {
-      "urls": {
-        "linux-x86_64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-linux-x86_64.tar.gz",
-        "darwin-arm64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-darwin-arm64.tar.gz"
-      }
+      "linux-x86_64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-linux-x86_64.tar.gz",
+      "darwin-arm64": "https://github.com/Codewithkyrian/example/releases/download/{version}/dist-darwin-arm64.tar.gz"
     }
   }
 }
@@ -124,11 +122,16 @@ better than nothing).
 
 ### Application Overrides (Variables)
 
+`extra.artifacts` supports two formats:
+
+1. **Simple format** (no variables): provide platform URLs directly under `artifacts`.
+2. **Extended format** (with variables): provide `artifacts.urls` and optional `artifacts.vars`.
+
 Platform packages can optionally define placeholder variables that are substituted into the selected URL at install time.
 `{version}` is built in and always available. You can also use custom placeholders like `{cuda}` and set defaults in the
 platform package, then override them in the consuming application (root project).
 
-**Platform package (defaults):**
+**Platform package (extended format with defaults):**
 
 ```json
 {
