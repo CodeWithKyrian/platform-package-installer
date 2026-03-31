@@ -10,7 +10,6 @@ use Composer\Factory;
 use Composer\Json\JsonFile;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Yaml\Yaml;
 
 class GenerateUrlCommand extends BaseCommand
 {
@@ -23,7 +22,7 @@ class GenerateUrlCommand extends BaseCommand
     protected function configure(): void
     {
         $this->setName('platform:generate-urls')
-            ->setDescription('Generate platform-specific URLs from a platforms.yml file')
+            ->setDescription('Generate platform-specific URLs from a platform list')
             ->addOption(
                 'dist-type',
                 'dist',
@@ -31,10 +30,10 @@ class GenerateUrlCommand extends BaseCommand
                 'Distribution type (github, gitlab, huggingface, or custom URL template)'
             )
             ->addOption(
-                'platforms-file',
+                'platforms',
                 'p',
-                InputOption::VALUE_OPTIONAL,
-                'Path to platforms.yml file'
+                InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
+                'Platform identifiers (repeat option or use comma-separated values)'
             )
             ->addOption(
                 'repo-path',
@@ -52,21 +51,21 @@ class GenerateUrlCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $platformsFile = $input->getOption('platforms-file');
+        /** @var array<int, string> $platformOptions */
+        $platformOptions = $input->getOption('platforms');
         $distType = $input->getOption('dist-type');
         $repoPath = $input->getOption('repo-path');
         $extensionOverride = $input->getOption('extension');
 
-        $platformsFile ??= dirname(Factory::getComposerFile()). DIRECTORY_SEPARATOR.'platforms.yml';
+        $platforms = $this->parsePlatforms($platformOptions);
 
-        if (!file_exists($platformsFile)) {
-            $output->writeln("<error>Platforms file not found: $platformsFile</error>");
+        if ($platforms === []) {
+            $output->writeln('<error>No platforms provided. Use --platforms to define at least one platform.</error>');
             return self::FAILURE;
         }
 
-        $platformsData = Yaml::parseFile($platformsFile);
         $urlTemplate = $this->resolveUrlTemplate($distType, $repoPath);
-        $platformUrls = $this->generatePlatformUrls($platformsData, $urlTemplate, $extensionOverride);
+        $platformUrls = $this->generatePlatformUrls($platforms, $urlTemplate, $extensionOverride);
 
         $this->updateComposerJson($platformUrls, $output);
 
@@ -87,16 +86,16 @@ class GenerateUrlCommand extends BaseCommand
         return $distType;
     }
 
-    private function generatePlatformUrls(
-        ?array  $platformsData,
-        string  $urlTemplate,
-        ?string $extensionOverride = null
-    ): array
+    /**
+     * @param array<int, string> $platforms
+     *
+     * @return array<string, string>
+     */
+    private function generatePlatformUrls(array $platforms, string $urlTemplate, ?string $extensionOverride = null): array
     {
         $platformUrls = [];
-        $platformsData ??= [];
 
-        foreach ($platformsData as $platform => $platformConfig) {
+        foreach ($platforms as $platform) {
             $ext = $extensionOverride ?? (str_starts_with(strtolower($platform), 'windows') ? 'zip' : 'tar.gz');
             $ext = ltrim($ext, '.');
 
@@ -106,6 +105,28 @@ class GenerateUrlCommand extends BaseCommand
         }
 
         return $platformUrls;
+    }
+
+    /**
+     * @param array<int, string> $platformOptions
+     *
+     * @return array<int, string>
+     */
+    private function parsePlatforms(array $platformOptions): array
+    {
+        $platforms = [];
+        foreach ($platformOptions as $entry) {
+            foreach (explode(',', $entry) as $platform) {
+                $platform = trim($platform);
+                if ($platform === '') {
+                    continue;
+                }
+
+                $platforms[] = $platform;
+            }
+        }
+
+        return array_values(array_unique($platforms));
     }
 
     private function updateComposerJson(array $platformUrls, OutputInterface $output): void

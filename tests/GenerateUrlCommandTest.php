@@ -6,7 +6,6 @@ use Codewithkyrian\PlatformPackageInstaller\GenerateUrlCommand;
 use Composer\Console\Application;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
-use Symfony\Component\Yaml\Yaml;
 
 beforeEach(function () {
     $application = new Application();
@@ -35,16 +34,9 @@ afterEach(function () {
 });
 
 it('generates platform URLs for GitHub', function () {
-    $platformsYaml = [
-        'linux-x86_64' => ['exclude' => []],
-        'darwin-arm64' => ['exclude' => []],
-        'windows-x86_64' => ['exclude' => []],
-    ];
-    file_put_contents($this->tempDir.'/platforms.yml', Yaml::dump($platformsYaml));
-
     $input = new ArrayInput([
         'command' => 'platform:generate-urls',
-        '--platforms-file' => $this->tempDir.'/platforms.yml',
+        '--platforms' => ['linux-x86_64', 'darwin-arm64', 'windows-x86_64'],
         '--dist-type' => 'github',
         '--repo-path' => 'vendor/repo',
     ]);
@@ -69,16 +61,10 @@ it('generates platform URLs for GitHub', function () {
 
 });
 
-it('uses the platforms file if not provided', function () {
-    $platformsYaml = [
-        'linux-x86_64' => ['exclude' => []],
-        'darwin-arm64' => ['exclude' => []],
-        'windows-x86_64' => ['exclude' => []],
-    ];
-    file_put_contents($this->tempDir.'/platforms.yml', Yaml::dump($platformsYaml));
-
+it('supports comma-separated platforms', function () {
     $input = new ArrayInput([
         'command' => 'platform:generate-urls',
+        '--platforms' => ['linux-x86_64,darwin-arm64,windows-x86_64'],
         '--dist-type' => 'github',
         '--repo-path' => 'vendor/repo',
     ]);
@@ -105,16 +91,9 @@ it('uses the platforms file if not provided', function () {
 });
 
 it('handles custom URL template', function () {
-    $platformsYaml = [
-        'linux-x86_64' => ['exclude' => []],
-        'darwin-arm64' => ['exclude' => []],
-    ];
-    file_put_contents($this->tempDir.'/platforms.yml', Yaml::dump($platformsYaml));
-
-    // Prepare command input with custom URL template
     $input = new ArrayInput([
         'command' => 'platform:generate-urls',
-        '--platforms-file' => $this->tempDir.'/platforms.yml',
+        '--platforms' => ['linux-x86_64', 'darwin-arm64'],
         '--dist-type' => 'https://custom-cdn.com/releases/{version}/dist-{platform}.{ext}',
         '--extension' => 'tar.xz',
     ]);
@@ -134,10 +113,9 @@ it('handles custom URL template', function () {
         ->and($platformUrls['darwin-arm64'])->toBe('https://custom-cdn.com/releases/{version}/dist-darwin-arm64.tar.xz');
 });
 
-it('fails with non-existent platforms file', function () {
+it('fails with no platforms provided', function () {
     $input = new ArrayInput([
         'command' => 'platform:generate-urls',
-        '--platforms-file' => '/path/to/non/existent/platforms.yml',
         '--dist-type' => 'github',
         '--repo-path' => 'vendor/repo',
     ]);
@@ -148,12 +126,10 @@ it('fails with non-existent platforms file', function () {
     expect($resultCode)->toBe(1);
 });
 
-it('handles empty platforms file', function () {
-    file_put_contents($this->tempDir.'/platforms.yml', '');
-
+it('deduplicates repeated platforms', function () {
     $input = new ArrayInput([
         'command' => 'platform:generate-urls',
-        '--platforms-file' => $this->tempDir.'/platforms.yml',
+        '--platforms' => ['linux-x86_64,darwin-arm64', 'darwin-arm64'],
         '--dist-type' => 'github',
         '--repo-path' => 'vendor/repo',
     ]);
@@ -166,15 +142,11 @@ it('handles empty platforms file', function () {
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
     expect($composerJson['extra']['artifacts'])->toBeArray()
-        ->and($composerJson['extra']['artifacts'])->toBeEmpty();
+        ->and($composerJson['extra']['artifacts'])->toHaveCount(2)
+        ->and($composerJson['extra']['artifacts'])->toHaveKeys(['linux-x86_64', 'darwin-arm64']);
 });
 
 it('merges with existing extra configuration', function () {
-    $platformsYaml = [
-        'linux-x86_64' => ['exclude' => []],
-    ];
-    file_put_contents($this->tempDir.'/platforms.yml', Yaml::dump($platformsYaml));
-
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
     $composerJson['extra'] = [
         'existing-config' => 'test-value'
@@ -183,7 +155,7 @@ it('merges with existing extra configuration', function () {
 
     $input = new ArrayInput([
         'command' => 'platform:generate-urls',
-        '--platforms-file' => $this->tempDir.'/platforms.yml',
+        '--platforms' => ['linux-x86_64'],
         '--dist-type' => 'github',
         '--repo-path' => 'vendor/repo',
     ]);
@@ -201,11 +173,6 @@ it('merges with existing extra configuration', function () {
 });
 
 it('keeps extended artifacts format when vars are already defined', function () {
-    $platformsYaml = [
-        'linux-x86_64' => ['exclude' => []],
-    ];
-    file_put_contents($this->tempDir.'/platforms.yml', Yaml::dump($platformsYaml));
-
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
     $composerJson['extra'] = [
         'artifacts' => [
@@ -218,7 +185,7 @@ it('keeps extended artifacts format when vars are already defined', function () 
 
     $input = new ArrayInput([
         'command' => 'platform:generate-urls',
-        '--platforms-file' => $this->tempDir.'/platforms.yml',
+        '--platforms' => ['linux-x86_64'],
         '--dist-type' => 'github',
         '--repo-path' => 'vendor/repo',
     ]);
