@@ -398,9 +398,11 @@ function runCommand(array $command, string $cwd, array $env = [], int $timeoutSe
     fclose($pipes[0]);
 
     $start = time();
+    $finalStatus = null;
     while (true) {
         $status = proc_get_status($process);
         if ($status['running'] === false) {
+            $finalStatus = $status;
             break;
         }
 
@@ -418,6 +420,11 @@ function runCommand(array $command, string $cwd, array $env = [], int $timeoutSe
     fclose($pipes[2]);
 
     $exitCode = proc_close($process);
+    if ($exitCode === -1 && is_array($finalStatus) && isset($finalStatus['exitcode']) && is_int($finalStatus['exitcode'])) {
+        // proc_close can return -1 on some PHP versions after polling with proc_get_status.
+        $exitCode = $finalStatus['exitcode'];
+    }
+
     return [
         'exit_code' => $exitCode,
         'stdout' => $stdout,
