@@ -122,6 +122,128 @@ it('installs platform package using root override vars', function () {
     }
 });
 
+it('falls back to package default variables when override-resolved URL does not exist', function () {
+    if (!class_exists(ZipArchive::class)) {
+        $this->markTestSkipped('ZipArchive extension is required for integration test.');
+    }
+
+    $repoRoot = realpath(__DIR__.'/../../');
+    expect($repoRoot)->not->toBeFalse();
+    $repoRoot = (string) $repoRoot;
+
+    $tmpRoot = sys_get_temp_dir().DIRECTORY_SEPARATOR.'platform-package-installer-int-'.uniqid();
+    $pluginCopyPath = $tmpRoot.DIRECTORY_SEPARATOR.'plugin-under-test';
+    $distPath = $tmpRoot.DIRECTORY_SEPARATOR.'dist';
+    $appPath = $tmpRoot.DIRECTORY_SEPARATOR.'app';
+
+    mkdir($tmpRoot, 0777, true);
+    mkdir($distPath, 0777, true);
+    mkdir($appPath, 0777, true);
+
+    $serverProcess = null;
+    try {
+        copyPluginForPathRepository($repoRoot, $pluginCopyPath);
+        relaxPluginDependenciesForIntegration($pluginCopyPath, '2.0.0');
+
+        createZipArtifact($distPath.DIRECTORY_SEPARATOR.'onyx-runtime-1.2.3-runtime-cpu.zip', 'cpu');
+        createZipArtifact($distPath.DIRECTORY_SEPARATOR.'fallback.zip', 'base');
+
+        $port = reserveFreePort();
+        $serverProcess = startPhpServer($distPath, $port);
+
+        waitForServerReady("http://127.0.0.1:$port/onyx-runtime-1.2.3-runtime-cpu.zip");
+        waitForServerReady("http://127.0.0.1:$port/fallback.zip");
+
+        $template = "http://127.0.0.1:$port/onyx-runtime-{version}-runtime-{runtime}.zip";
+        $fallbackUrl = "http://127.0.0.1:$port/fallback.zip";
+        $appComposerJson = [
+            'name' => 'integration/test-app-default-fallback',
+            'type' => 'project',
+            'require' => [
+                'codewithkyrian/platform-package-installer' => '2.0.0',
+                'org/onyx-runtime' => '1.2.3',
+            ],
+            'repositories' => [
+                ['packagist.org' => false],
+                [
+                    'type' => 'path',
+                    'url' => $pluginCopyPath,
+                    'options' => ['symlink' => false],
+                ],
+                [
+                    'type' => 'package',
+                    'package' => [
+                        'name' => 'org/onyx-runtime',
+                        'version' => '1.2.3',
+                        'type' => 'platform-package',
+                        'dist' => [
+                            'url' => $fallbackUrl,
+                            'type' => 'zip',
+                        ],
+                        'extra' => [
+                            'artifacts' => [
+                                'urls' => [
+                                    'all' => $template,
+                                ],
+                                'vars' => [
+                                    'runtime' => 'cpu',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'extra' => [
+                'platform-packages' => [
+                    'org/onyx-runtime' => [
+                        'runtime' => 'gpu',
+                    ],
+                ],
+            ],
+            'config' => [
+                'allow-plugins' => [
+                    'codewithkyrian/platform-package-installer' => true,
+                ],
+                'secure-http' => false,
+            ],
+        ];
+
+        file_put_contents(
+            $appPath.DIRECTORY_SEPARATOR.'composer.json',
+            json_encode($appComposerJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
+
+        $composerBin = findComposerBinary($repoRoot);
+        $install = runCommand(
+            [PHP_BINARY, $composerBin, 'install', '--no-interaction', '--no-progress'],
+            $appPath,
+            [
+                'COMPOSER_CACHE_DIR' => $tmpRoot.DIRECTORY_SEPARATOR.'cache',
+                'COMPOSER_HOME' => $tmpRoot.DIRECTORY_SEPARATOR.'home',
+            ],
+            120
+        );
+
+        if ($install['exit_code'] !== 0) {
+            throw new RuntimeException(
+                "composer install failed\nSTDERR:\n".$install['stderr']."\nSTDOUT:\n".$install['stdout']
+            );
+        }
+
+        $marker = $appPath.DIRECTORY_SEPARATOR.'vendor/org/onyx-runtime/cuda-version.txt';
+        expect(file_exists($marker))->toBeTrue();
+        expect(trim((string) file_get_contents($marker)))->toBe('cpu');
+    } finally {
+        if (is_array($serverProcess)) {
+            stopProcess($serverProcess);
+        }
+
+        if (is_dir($tmpRoot)) {
+            removeDirectoryRecursive($tmpRoot);
+        }
+    }
+});
+
 it('falls back to base dist URL when a required artifact variable is missing', function () {
     if (!class_exists(ZipArchive::class)) {
         $this->markTestSkipped('ZipArchive extension is required for integration test.');
