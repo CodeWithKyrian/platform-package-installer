@@ -58,10 +58,9 @@ it('generates platform URLs for GitHub', function () {
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
     expect($composerJson)->toHaveKey('extra')
-        ->and($composerJson['extra'])->toHaveKey('artifacts')
-        ->and($composerJson['extra']['artifacts'])->toHaveKey('urls');
+        ->and($composerJson['extra'])->toHaveKey('artifacts');
 
-    $platformUrls = $composerJson['extra']['artifacts']['urls'];
+    $platformUrls = $composerJson['extra']['artifacts'];
 
     expect($platformUrls)->toHaveCount(3)
         ->and($platformUrls['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz')
@@ -93,10 +92,9 @@ it('uses the platforms file if not provided', function () {
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
     expect($composerJson)->toHaveKey('extra')
-        ->and($composerJson['extra'])->toHaveKey('artifacts')
-        ->and($composerJson['extra']['artifacts'])->toHaveKey('urls');
+        ->and($composerJson['extra'])->toHaveKey('artifacts');
 
-    $platformUrls = $composerJson['extra']['artifacts']['urls'];
+    $platformUrls = $composerJson['extra']['artifacts'];
 
     expect($platformUrls)->toHaveCount(3)
         ->and($platformUrls['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz')
@@ -129,7 +127,7 @@ it('handles custom URL template', function () {
 
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
-    $platformUrls = $composerJson['extra']['artifacts']['urls'];
+    $platformUrls = $composerJson['extra']['artifacts'];
 
     expect($platformUrls)->toHaveCount(2)
         ->and($platformUrls['linux-x86_64'])->toBe('https://custom-cdn.com/releases/{version}/dist-linux-x86_64.tar.xz')
@@ -167,8 +165,8 @@ it('handles empty platforms file', function () {
 
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
-    expect($composerJson['extra']['artifacts']['urls'])->toBeArray()
-        ->and($composerJson['extra']['artifacts']['urls'])->toBeEmpty();
+    expect($composerJson['extra']['artifacts'])->toBeArray()
+        ->and($composerJson['extra']['artifacts'])->toBeEmpty();
 });
 
 it('merges with existing extra configuration', function () {
@@ -198,6 +196,40 @@ it('merges with existing extra configuration', function () {
     $updatedComposerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
     expect($updatedComposerJson['extra']['existing-config'])->toBe('test-value')
-        ->and($updatedComposerJson['extra']['artifacts']['urls'])->toHaveCount(1)
+        ->and($updatedComposerJson['extra']['artifacts'])->toHaveCount(1)
+        ->and($updatedComposerJson['extra']['artifacts']['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz');
+});
+
+it('keeps extended artifacts format when vars are already defined', function () {
+    $platformsYaml = [
+        'linux-x86_64' => ['exclude' => []],
+    ];
+    file_put_contents($this->tempDir.'/platforms.yml', Yaml::dump($platformsYaml));
+
+    $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
+    $composerJson['extra'] = [
+        'artifacts' => [
+            'vars' => [
+                'cuda' => '12',
+            ],
+        ],
+    ];
+    file_put_contents($this->tempDir.'/composer.json', json_encode($composerJson));
+
+    $input = new ArrayInput([
+        'command' => 'platform:generate-urls',
+        '--platforms-file' => $this->tempDir.'/platforms.yml',
+        '--dist-type' => 'github',
+        '--repo-path' => 'vendor/repo',
+    ]);
+
+    $output = new BufferedOutput();
+    $resultCode = $this->command->run($input, $output);
+
+    expect($resultCode)->toBe(0);
+
+    $updatedComposerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
+
+    expect($updatedComposerJson['extra']['artifacts']['vars']['cuda'])->toBe('12')
         ->and($updatedComposerJson['extra']['artifacts']['urls']['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz');
 });

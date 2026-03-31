@@ -115,8 +115,15 @@ class GenerateUrlCommand extends BaseCommand
         $composerJson = $jsonFile->read();
 
         $composerJson['extra'] = $composerJson['extra'] ?? [];
-        $composerJson['extra']['artifacts'] = $composerJson['extra']['artifacts'] ?? [];
-        $composerJson['extra']['artifacts']['urls'] = $platformUrls;
+        $existingArtifacts = $composerJson['extra']['artifacts'] ?? null;
+
+        if (is_array($existingArtifacts) && (array_key_exists('urls', $existingArtifacts) || array_key_exists('vars', $existingArtifacts))) {
+            $existingArtifacts['urls'] = $platformUrls;
+            $composerJson['extra']['artifacts'] = $existingArtifacts;
+        } else {
+            // Prefer the simple artifacts format when no vars are in use.
+            $composerJson['extra']['artifacts'] = $platformUrls;
+        }
 
         $jsonFile->write($composerJson);
 

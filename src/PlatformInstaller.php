@@ -38,15 +38,14 @@ class PlatformInstaller extends LibraryInstaller
             return false;
         }
 
-        $urls = $artifacts['urls'] ?? [];
-        if (!is_array($urls)) {
-            $this->io->writeError("{$package->getName()}: Invalid extra.artifacts.urls config (expected object)");
+        $normalized = $this->normalizeArtifactsConfig($package, $artifacts);
+        if ($normalized === false) {
             return false;
         }
 
-        $validatedUrls = $this->validateArtifactUrls($package, $urls);
+        $validatedUrls = $this->validateArtifactUrls($package, $normalized['urls']);
         if ($matchingTemplate = Platform::findBestMatch($validatedUrls)) {
-            $vars = $this->resolveTemplateVars($package, $artifacts);
+            $vars = $this->resolveTemplateVars($package, $normalized['vars']);
             $resolvedUrl = $this->artifactUrlResolver->applyTemplate($matchingTemplate, $vars);
 
             $unresolved = $this->artifactUrlResolver->unresolvedPlaceholders($resolvedUrl);
@@ -71,6 +70,47 @@ class PlatformInstaller extends LibraryInstaller
 
         $this->io->writeError("{$package->getName()}: No download URL found for current platform");
         return false;
+    }
+
+    /**
+     * Supports two artifact formats:
+     * 1) Simple:   artifacts = { "darwin-arm64": "https://..." }
+     * 2) Extended: artifacts = { "urls": {...}, "vars": {...} }
+     *
+     * @param array<string, mixed> $artifacts
+     *
+     * @return array{urls: array<string, mixed>, vars: array<string, mixed>}|false
+     */
+    private function normalizeArtifactsConfig(PackageInterface $package, array $artifacts): array|false
+    {
+        if (array_key_exists('urls', $artifacts)) {
+            $urls = $artifacts['urls'];
+            if (!is_array($urls)) {
+                $this->io->writeError("{$package->getName()}: Invalid extra.artifacts.urls config (expected object)");
+                return false;
+            }
+
+            $vars = $artifacts['vars'] ?? [];
+            if (!is_array($vars)) {
+                $this->io->writeError("{$package->getName()}: Invalid extra.artifacts.vars config (expected object)");
+                return false;
+            }
+
+            return [
+                'urls' => $urls,
+                'vars' => $vars,
+            ];
+        }
+
+        if (array_key_exists('vars', $artifacts)) {
+            $this->io->writeError("{$package->getName()}: Invalid extra.artifacts config. Use extra.artifacts.urls when defining extra.artifacts.vars");
+            return false;
+        }
+
+        return [
+            'urls' => $artifacts,
+            'vars' => [],
+        ];
     }
 
     /**
@@ -117,17 +157,12 @@ class PlatformInstaller extends LibraryInstaller
     }
 
     /**
-     * @param array<string, mixed> $artifacts
+     * @param array<string, mixed> $defaultVars
      *
      * @return array<string, string>
      */
-    private function resolveTemplateVars(PackageInterface $package, array $artifacts): array
+    private function resolveTemplateVars(PackageInterface $package, array $defaultVars): array
     {
-        $defaultVars = $artifacts['vars'] ?? [];
-        if (!is_array($defaultVars)) {
-            $defaultVars = [];
-        }
-
         $rootExtra = $this->composer->getPackage()->getExtra();
         $platformPackages = $rootExtra['platform-packages'] ?? [];
         if (!is_array($platformPackages)) {
