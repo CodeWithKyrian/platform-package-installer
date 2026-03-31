@@ -104,6 +104,7 @@ Variable precedence:
 - `{version}` is built in and always available
 - Any `{name}` placeholder can be used
 - Unresolved placeholders cause artifact URL resolution to fail for that package
+- If override variables resolve to a URL that does not exist, the plugin retries with package default variables
 - On failure, Composer falls back to the package's original `dist` configuration
 
 ## Platform Matching

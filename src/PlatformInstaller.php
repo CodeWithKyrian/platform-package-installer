@@ -45,26 +45,36 @@ class PlatformInstaller extends LibraryInstaller
 
         $validatedUrls = $this->validateArtifactUrls($package, $normalized['urls']);
         if ($matchingTemplate = Platform::findBestMatch($validatedUrls)) {
-            $vars = $this->resolveTemplateVars($package, $normalized['vars']);
-            $resolvedUrl = $this->artifactUrlResolver->applyTemplate($matchingTemplate, $vars);
+            $defaultVars = $this->normalizeVars($normalized['vars']);
+            $overrideVars = $this->resolveOverrideVars($package);
+            $hasOverrides = $overrideVars !== [];
 
-            $unresolved = $this->artifactUrlResolver->unresolvedPlaceholders($resolvedUrl);
-            if ($unresolved !== []) {
-                $missing = implode(', ', array_map(fn($k) => '{'.$k.'}', $unresolved));
-                $this->io->writeError("{$package->getName()}: Unresolved URL placeholders: {$missing}");
+            $primaryVars = $this->artifactUrlResolver->mergeVars($defaultVars, $overrideVars, $package->getPrettyVersion());
+            $primaryResult = $this->resolveCandidateUrl($matchingTemplate, $primaryVars);
+            if ($primaryResult['url'] !== false) {
+                return $primaryResult['url'];
+            }
+
+            if ($hasOverrides) {
+                $fallbackVars = $this->artifactUrlResolver->mergeVars($defaultVars, [], $package->getPrettyVersion());
+                $fallbackResult = $this->resolveCandidateUrl($matchingTemplate, $fallbackVars);
+
+                if ($fallbackResult['url'] !== false) {
+                    $this->io->writeError(
+                        "{$package->getName()}: Override-resolved artifact URL failed ({$primaryResult['reason']}). ".
+                        "Falling back to package default variables URL: {$fallbackResult['url']}"
+                    );
+                    return $fallbackResult['url'];
+                }
+
+                $this->io->writeError(
+                    "{$package->getName()}: Override-resolved artifact URL failed ({$primaryResult['reason']}). ".
+                    "Default-variable fallback also failed ({$fallbackResult['reason']})."
+                );
                 return false;
             }
 
-            if (!filter_var($resolvedUrl, FILTER_VALIDATE_URL)) {
-                $this->io->writeError("{$package->getName()}: Invalid resolved URL: $resolvedUrl");
-                return false;
-            }
-
-            if ($this->urlExists($resolvedUrl)) {
-                return $resolvedUrl;
-            }
-
-            $this->io->writeError("{$package->getName()}: URL found for current platform but it doesn't exist: $resolvedUrl");
+            $this->io->writeError("{$package->getName()}: {$primaryResult['reason']}");
             return false;
         }
 
@@ -156,12 +166,7 @@ class PlatformInstaller extends LibraryInstaller
         return $validatedPlatforms;
     }
 
-    /**
-     * @param array<string, mixed> $defaultVars
-     *
-     * @return array<string, string>
-     */
-    private function resolveTemplateVars(PackageInterface $package, array $defaultVars): array
+    private function resolveOverrideVars(PackageInterface $package): array
     {
         $rootExtra = $this->composer->getPackage()->getExtra();
         $platformPackages = $rootExtra['platform-packages'] ?? [];
@@ -174,7 +179,64 @@ class PlatformInstaller extends LibraryInstaller
             $overrideVars = [];
         }
 
-        return $this->artifactUrlResolver->mergeVars($defaultVars, $overrideVars, $package->getPrettyVersion());
+        return $this->normalizeVars($overrideVars);
+    }
+
+    /**
+     * @param array<string, mixed> $vars
+     *
+     * @return array<string, mixed>
+     */
+    private function normalizeVars(array $vars): array
+    {
+        $normalized = [];
+        foreach ($vars as $key => $value) {
+            if (!is_string($key) || $key === '') {
+                continue;
+            }
+
+            $normalized[$key] = $value;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, string> $vars
+     *
+     * @return array{url: string|false, reason: string}
+     */
+    private function resolveCandidateUrl(string $template, array $vars): array
+    {
+        $resolvedUrl = $this->artifactUrlResolver->applyTemplate($template, $vars);
+
+        $unresolved = $this->artifactUrlResolver->unresolvedPlaceholders($resolvedUrl);
+        if ($unresolved !== []) {
+            $missing = implode(', ', array_map(fn($k) => '{'.$k.'}', $unresolved));
+            return [
+                'url' => false,
+                'reason' => "Unresolved URL placeholders: {$missing}",
+            ];
+        }
+
+        if (!filter_var($resolvedUrl, FILTER_VALIDATE_URL)) {
+            return [
+                'url' => false,
+                'reason' => "Invalid resolved URL: {$resolvedUrl}",
+            ];
+        }
+
+        if (!$this->urlExists($resolvedUrl)) {
+            return [
+                'url' => false,
+                'reason' => "URL found for current platform but it doesn't exist: {$resolvedUrl}",
+            ];
+        }
+
+        return [
+            'url' => $resolvedUrl,
+            'reason' => 'ok',
+        ];
     }
 
     private function inferArchiveType(string $url): string
