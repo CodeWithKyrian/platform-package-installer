@@ -58,9 +58,10 @@ it('generates platform URLs for GitHub', function () {
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
     expect($composerJson)->toHaveKey('extra')
-        ->and($composerJson['extra'])->toHaveKey('platform-urls');
+        ->and($composerJson['extra'])->toHaveKey('artifacts')
+        ->and($composerJson['extra']['artifacts'])->toHaveKey('urls');
 
-    $platformUrls = $composerJson['extra']['platform-urls'];
+    $platformUrls = $composerJson['extra']['artifacts']['urls'];
 
     expect($platformUrls)->toHaveCount(3)
         ->and($platformUrls['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz')
@@ -92,9 +93,10 @@ it('uses the platforms file if not provided', function () {
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
     expect($composerJson)->toHaveKey('extra')
-        ->and($composerJson['extra'])->toHaveKey('platform-urls');
+        ->and($composerJson['extra'])->toHaveKey('artifacts')
+        ->and($composerJson['extra']['artifacts'])->toHaveKey('urls');
 
-    $platformUrls = $composerJson['extra']['platform-urls'];
+    $platformUrls = $composerJson['extra']['artifacts']['urls'];
 
     expect($platformUrls)->toHaveCount(3)
         ->and($platformUrls['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz')
@@ -127,7 +129,7 @@ it('handles custom URL template', function () {
 
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
-    $platformUrls = $composerJson['extra']['platform-urls'];
+    $platformUrls = $composerJson['extra']['artifacts']['urls'];
 
     expect($platformUrls)->toHaveCount(2)
         ->and($platformUrls['linux-x86_64'])->toBe('https://custom-cdn.com/releases/{version}/dist-linux-x86_64.tar.xz')
@@ -165,8 +167,8 @@ it('handles empty platforms file', function () {
 
     $composerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
-    expect($composerJson['extra']['platform-urls'])->toBeArray()
-        ->and($composerJson['extra']['platform-urls'])->toBeEmpty();
+    expect($composerJson['extra']['artifacts']['urls'])->toBeArray()
+        ->and($composerJson['extra']['artifacts']['urls'])->toBeEmpty();
 });
 
 it('merges with existing extra configuration', function () {
@@ -196,6 +198,6 @@ it('merges with existing extra configuration', function () {
     $updatedComposerJson = json_decode(file_get_contents($this->tempDir.'/composer.json'), true);
 
     expect($updatedComposerJson['extra']['existing-config'])->toBe('test-value')
-        ->and($updatedComposerJson['extra']['platform-urls'])->toHaveCount(1)
-        ->and($updatedComposerJson['extra']['platform-urls']['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz');
+        ->and($updatedComposerJson['extra']['artifacts']['urls'])->toHaveCount(1)
+        ->and($updatedComposerJson['extra']['artifacts']['urls']['linux-x86_64'])->toBe('https://github.com/vendor/repo/releases/download/{version}/dist-linux-x86_64.tar.gz');
 });

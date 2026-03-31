@@ -115,7 +115,8 @@ class GenerateUrlCommand extends BaseCommand
         $composerJson = $jsonFile->read();
 
         $composerJson['extra'] = $composerJson['extra'] ?? [];
-        $composerJson['extra']['platform-urls'] = $platformUrls;
+        $composerJson['extra']['artifacts'] = $composerJson['extra']['artifacts'] ?? [];
+        $composerJson['extra']['artifacts']['urls'] = $platformUrls;
 
         $jsonFile->write($composerJson);
 

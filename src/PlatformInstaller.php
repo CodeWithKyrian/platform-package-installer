@@ -12,9 +12,12 @@ use React\Promise\PromiseInterface;
 
 class PlatformInstaller extends LibraryInstaller
 {
+    private ArtifactUrlResolver $artifactUrlResolver;
+
     public function __construct(IOInterface $io, PartialComposer $composer)
     {
         parent::__construct($io, $composer, "platform-package");
+        $this->artifactUrlResolver = new ArtifactUrlResolver();
     }
 
     public function download(PackageInterface $package, ?PackageInterface $prevPackage = null): ?PromiseInterface
@@ -29,16 +32,40 @@ class PlatformInstaller extends LibraryInstaller
 
     private function resolveDistUrl(PackageInterface $package): string|false
     {
-        $platformUrls = $package->getExtra()['platform-urls'] ?? [];
-        $platformUrls = $this->validatePlatformUrls($package, $platformUrls);
+        $artifacts = $package->getExtra()['artifacts'] ?? [];
+        if (!is_array($artifacts)) {
+            $this->io->writeError("{$package->getName()}: Invalid extra.artifacts config (expected object)");
+            return false;
+        }
 
-        if ($matchingUrl = Platform::findBestMatch($platformUrls)) {
-            // Check if the URL exists
-            if ($this->urlExists($matchingUrl)) {
-                return $matchingUrl;
+        $urls = $artifacts['urls'] ?? [];
+        if (!is_array($urls)) {
+            $this->io->writeError("{$package->getName()}: Invalid extra.artifacts.urls config (expected object)");
+            return false;
+        }
+
+        $validatedUrls = $this->validateArtifactUrls($package, $urls);
+        if ($matchingTemplate = Platform::findBestMatch($validatedUrls)) {
+            $vars = $this->resolveTemplateVars($package, $artifacts);
+            $resolvedUrl = $this->artifactUrlResolver->applyTemplate($matchingTemplate, $vars);
+
+            $unresolved = $this->artifactUrlResolver->unresolvedPlaceholders($resolvedUrl);
+            if ($unresolved !== []) {
+                $missing = implode(', ', array_map(fn($k) => '{'.$k.'}', $unresolved));
+                $this->io->writeError("{$package->getName()}: Unresolved URL placeholders: {$missing}");
+                return false;
             }
 
-            $this->io->writeError("{$package->getName()}: URL found for current platform but it doesn't exist: $matchingUrl");
+            if (!filter_var($resolvedUrl, FILTER_VALIDATE_URL)) {
+                $this->io->writeError("{$package->getName()}: Invalid resolved URL: $resolvedUrl");
+                return false;
+            }
+
+            if ($this->urlExists($resolvedUrl)) {
+                return $resolvedUrl;
+            }
+
+            $this->io->writeError("{$package->getName()}: URL found for current platform but it doesn't exist: $resolvedUrl");
             return false;
         }
 
@@ -66,27 +93,53 @@ class PlatformInstaller extends LibraryInstaller
 
     /**
      * @param PackageInterface $package
-     * @param array<string, string> $platformUrls
+     * @param array<string, mixed> $platformUrls
      *
      * @return array<string, string>
      */
-    private function validatePlatformUrls(PackageInterface $package, array $platformUrls): array
+    private function validateArtifactUrls(PackageInterface $package, array $platformUrls): array
     {
         $validatedPlatforms = [];
         foreach ($platformUrls as $platform => $url) {
-            assert(is_string($url), 'Platform URL must be a string');
-
-            $processedUrl = str_replace('{version}', $package->getPrettyVersion(), $url);
-
-            if (!filter_var($processedUrl, FILTER_VALIDATE_URL)) {
-                $this->io->writeError("{$package->getName()}: Invalid URL : $processedUrl. Skipping...");
+            if (!is_string($platform) || $platform === '') {
                 continue;
             }
 
-            $validatedPlatforms[strtolower($platform)] = $processedUrl;
+            if (!is_string($url) || $url === '') {
+                $this->io->writeError("{$package->getName()}: Invalid artifact URL for platform '$platform' (expected non-empty string). Skipping...");
+                continue;
+            }
+
+            $validatedPlatforms[strtolower($platform)] = $url;
         }
 
         return $validatedPlatforms;
+    }
+
+    /**
+     * @param array<string, mixed> $artifacts
+     *
+     * @return array<string, string>
+     */
+    private function resolveTemplateVars(PackageInterface $package, array $artifacts): array
+    {
+        $defaultVars = $artifacts['vars'] ?? [];
+        if (!is_array($defaultVars)) {
+            $defaultVars = [];
+        }
+
+        $rootExtra = $this->composer->getPackage()->getExtra();
+        $platformPackages = $rootExtra['platform-packages'] ?? [];
+        if (!is_array($platformPackages)) {
+            $platformPackages = [];
+        }
+
+        $overrideVars = $platformPackages[$package->getName()] ?? [];
+        if (!is_array($overrideVars)) {
+            $overrideVars = [];
+        }
+
+        return $this->artifactUrlResolver->mergeVars($defaultVars, $overrideVars, $package->getPrettyVersion());
     }
 
     private function inferArchiveType(string $url): string
