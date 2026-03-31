@@ -15,15 +15,8 @@ jobs:
     name: Tests PHP${{ matrix.php }} - ${{ matrix.os }}
 
     steps:
-
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache/files
-          key: dependencies-php-${{ matrix.php }}-composer-${{ hashFiles('composer.json') }}
+        uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -32,8 +25,8 @@ jobs:
           extensions: dom, mbstring, zip
           coverage: none
 
-      - name: Install Composer dependencies
-        run: composer update --no-interaction --prefer-dist
+      - name: Install dependencies
+        uses: ramsey/composer-install@v4
 
       - name: Run Tests
         run: composer test
