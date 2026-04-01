@@ -32,9 +32,8 @@ class PlatformInstaller extends LibraryInstaller
 
     private function resolveDistUrl(PackageInterface $package): string|false
     {
-        $artifacts = $package->getExtra()['artifacts'] ?? [];
-        if (!is_array($artifacts)) {
-            $this->io->writeError("{$package->getName()}: Invalid extra.artifacts config (expected object)");
+        $artifacts = $this->resolveArtifactsConfig($package);
+        if ($artifacts === false) {
             return false;
         }
 
@@ -80,6 +79,42 @@ class PlatformInstaller extends LibraryInstaller
 
         $this->io->writeError("{$package->getName()}: No download URL found for current platform");
         return false;
+    }
+
+    /**
+     * Resolve artifact config from v2 and legacy keys.
+     *
+     * v2 preferred key: extra.artifacts
+     * legacy key:       extra.platform-urls
+     *
+     * @return array<string, mixed>|false
+     */
+    private function resolveArtifactsConfig(PackageInterface $package): array|false
+    {
+        $extra = $package->getExtra();
+
+        if (array_key_exists('artifacts', $extra)) {
+            $artifacts = $extra['artifacts'];
+            if (!is_array($artifacts)) {
+                $this->io->writeError("{$package->getName()}: Invalid extra.artifacts config (expected object)");
+                return false;
+            }
+
+            return $artifacts;
+        }
+
+        if (array_key_exists('platform-urls', $extra)) {
+            $legacy = $extra['platform-urls'];
+            if (!is_array($legacy)) {
+                $this->io->writeError("{$package->getName()}: Invalid extra.platform-urls config (expected object)");
+                return false;
+            }
+
+            $this->io->writeError("{$package->getName()}: extra.platform-urls is deprecated. Please migrate to extra.artifacts.");
+            return $legacy;
+        }
+
+        return [];
     }
 
     /**

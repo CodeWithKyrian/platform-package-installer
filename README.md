@@ -38,6 +38,8 @@ Then change your package type to `platform-package` in `composer.json`:
 
 All core behavior is configured in `composer.json` under `extra.artifacts`.
 
+Legacy `extra.platform-urls` is still supported for backward compatibility, but is deprecated.
+
 ### Format A: Simple (no custom variables)
 
 Use this when:
